@@ -13,4 +13,4 @@ Teknofest Savaşan İHA yarışma kurallarına (hedefin merkez vuruş alanında 
 2. Kod içindeki yol değişkenlerini kontrol edin.
 3. Çalıştırmak için:
    ```bash
-   python3 UAV_TRACKER_V1.py
+   python3 UAV_TRACKER_V1.py  
