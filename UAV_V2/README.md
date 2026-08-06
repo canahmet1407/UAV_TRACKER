@@ -11,4 +11,4 @@ Gökyüzündeki zorlu ışık koşulları (ters ışık, güneş patlamaları, b
 1. Gerekli kütüphanelerin (`opencv-contrib-python`, `ultralytics`, `torch`) kurulu olduğundan emin olun.
 2. Çalıştırmak için:
    ```bash
-   python UAV_TRACKER_V2.py
+   python UAV_TRACKER_V2.py  
