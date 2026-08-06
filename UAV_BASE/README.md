@@ -14,4 +14,4 @@ Bu modül, insansız hava araçlarının gerçek zamanlı tespiti ve takibi içi
 2. Kod içerisindeki `VIDEO_VE_MODEL_KLASORU` yolunu kendi bilgisayarınıza göre güncelleyin.
 3. Çalıştırmak için:
    ```bash
-   python3 UAV_TRACKER.py
+   python3 UAV_TRACKER.py  
