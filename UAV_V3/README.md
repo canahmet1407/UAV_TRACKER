@@ -11,4 +11,4 @@ Bu sürümde CSRT tracker tamamen devreden çıkarılarak endüstri standardı o
 ## 🚀 Çalıştırma ve Kurulum
 1. Klasör içerisindeki kod dosyasını çalıştırın:
    ```bash
-   python3 UAV_TRACKER_V3.py
+   python3 UAV_TRACKER_V3.py  
