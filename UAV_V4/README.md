@@ -14,4 +14,4 @@ Bu sürümde klasik CSRT tracker tamamen devreden çıkarılarak, modern nesne t
 2. Kod içerisindeki `MODEL_PATH` ve video yollarını kendi bilgisayarınıza göre kontrol edin.
 3. Çalıştırmak için terminalden şu komutu girin:
    ```bash
-   python3 UAV_TRACKER_V4.py
+   python3 UAV_TRACKER_V4.py  
