@@ -13,4 +13,4 @@ Projenin en gelişmiş, jüriye sunulabilecek en kararlı ve profesyonel versiyo
 1. Gerekli konfigürasyon dosyalarının (`.yaml`) kod tarafından otomatik oluşturulmasına izin verin.
 2. Çalıştırmak için:
    ```bash
-   python UAV_TRACKER_V5.py
+   python UAV_TRACKER_V5.py  
