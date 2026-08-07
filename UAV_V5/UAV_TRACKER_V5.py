@@ -35,22 +35,22 @@ video_secim = input(" Lutfen islenecek kaynagi secin (Kamera icin 0, Video icin 
 
 if not video_secim.isdigit() or not (0 <= int(video_secim) <= 6):
     print(" [!] Gecersiz secim! Varsayilan video (5.mp4) yukleniyor...\n")
-    SECILEN_KAYNAK = '/home/ahmet/Desktop/UAV_TRACKER/MODELS_and_VİDEO/5.mp4'
+    SECILEN_KAYNAK = '/home/ahmet/Documents/GitHub/UAV_TRACKER/MODELS_and_VİDEO/5.mp4'
 elif video_secim == "0":
     print(" [+] Canli Kamera secildi. Sistem baslatiliyor...\n")
     SECILEN_KAYNAK = 0  
 else:
     print(f" [+] {video_secim}.mp4 secildi. Sistem baslatiliyor...\n")
-    SECILEN_KAYNAK = f'/home/ahmet/Desktop/UAV_TRACKER/MODELS_and_VİDEO/{video_secim}.mp4'
+    SECILEN_KAYNAK = f'/home/ahmet/Documents/GitHub/UAV_TRACKER/MODELS_and_VİDEO/{video_secim}.mp4'
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  AYARLAR
 # ══════════════════════════════════════════════════════════════════════════════
-MODEL_PATH         = '/home/ahmet/Desktop/UAV_TRACKER/MODELS_and_VİDEO/can_yoloV8m_NDS.pt'
+MODEL_PATH         = '/home/ahmet/Documents/GitHub/UAV_TRACKER/MODELS_and_VİDEO/can_yoloV8_UZT.pt'
 VIDEO_PATH         = SECILEN_KAYNAK
 FRAME_W, FRAME_H   = 640, 480    
 
-CONF_THRESH        = 0.45    
+CONF_THRESH        = 0.40    
 HEDEF_MIN_YUZDE    = 0.06    
 LK_MAX_KAYIP       = 15      
 BBOX_MIN_BOYUT     = 10    
@@ -63,11 +63,6 @@ FEATURE_PARAMS = dict(maxCorners=300, qualityLevel=0.25, minDistance=5, blockSiz
 # ══════════════════════════════════════════════════════════════════════════════
 
 def clahe_dinamik_filtre(frame, clip_limit=3.0, tile_grid_size=(8, 8)):
-    """
-    Güneş/Ters Işık Adaptasyonu (CLAHE Dinamik Filtre)
-    Ters ışıkta kararan nesneleri aydınlatır, patlayan güneş ışıklarını dengeler.
-    Renk bozulmasını önlemek için işlemi LAB renk uzayının sadece L (Lightness) kanalında yapar.
-    """
     lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
     l, a, b = cv2.split(lab)
     
@@ -112,7 +107,7 @@ def lk_bbox_guncelle(pts, eski_bbox):
     return bbox_sinirla((int(cx - w / 2), int(cy - h / 2), w, h))
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  HİBRİT TAKİP SINIFI (DEEPSORT MANTIKLI + LK + KALMAN)
+#  HİBRİT TAKİP SINIFI 
 # ══════════════════════════════════════════════════════════════════════════════
 class DeepSortHibrid:
     MOD_YOK   = "HEDEF ARANIYOR"
@@ -147,29 +142,52 @@ class DeepSortHibrid:
             ids = results[0].boxes.id.cpu().numpy()
             confs = results[0].boxes.conf.cpu().numpy()
             
-            max_alan = 0
+            en_yuksek_skor = -1
             hedef_aday_id = None
             hedef_aday_conf_en_iyi = 0.0
             
+            av_merkez_x = FRAME_W // 2
+            av_merkez_y = FRAME_H // 2
+            max_mesafe = np.sqrt(FRAME_W**2 + FRAME_H**2)
+            
+            vurus_margin_x = int(FRAME_W * 0.25)
+            vurus_margin_y = int(FRAME_H * 0.10)
+            av_x1, av_y1 = vurus_margin_x, vurus_margin_y
+            av_x2, av_y2 = FRAME_W - vurus_margin_x, FRAME_H - vurus_margin_y
+
             for box, obj_id, conf in zip(boxes, ids, confs):
                 x1, y1, x2, y2 = map(int, box)
                 w, h = x2 - x1, y2 - y1
                 hedef_aday_conf = float(conf)
-                
-                if w < 20 or h < 10:
+
+                if w < 10 or h < 10:
                     continue
-                
-                if self.hedef_id is None and hedef_aday_conf < 0.65:
+                if self.hedef_id is None and hedef_aday_conf < 0.45:
                     continue
-                
+
+                cx = x1 + w // 2
+                cy = y1 + h // 2
                 alan = w * h
                 
-                if self.hedef_id == obj_id or self.hedef_id is None:
-                    if alan > max_alan:
-                        max_alan = alan
-                        en_iyi_kutu = (x1, y1, w, h)
-                        hedef_aday_id = obj_id
-                        hedef_aday_conf_en_iyi = hedef_aday_conf
+                skor = 0
+                skor += (alan / (FRAME_W * FRAME_H)) * 500 
+                
+                mesafe = np.sqrt((cx - av_merkez_x)**2 + (cy - av_merkez_y)**2)
+                mesafe_puani = max(0, 100 - (mesafe / max_mesafe * 200))
+                skor += mesafe_puani
+                skor += (hedef_aday_conf * 100)
+                
+                if (av_x1 <= cx <= av_x2) and (av_y1 <= cy <= av_y2):
+                    skor += 50
+                    
+                if self.hedef_id is not None and obj_id == self.hedef_id:
+                    skor += 400 
+
+                if skor > en_yuksek_skor:
+                    en_yuksek_skor = skor
+                    en_iyi_kutu = (x1, y1, w, h)
+                    hedef_aday_id = obj_id
+                    hedef_aday_conf_en_iyi = hedef_aday_conf
 
             if en_iyi_kutu is not None:
                 self.ham_bbox = bbox_sinirla(en_iyi_kutu)
@@ -248,16 +266,21 @@ kilit_baslangic_zamani = None
 print(f"TEKNOFEST KURALLARINA UYGUN HİBRİT TAKİP BAŞLADI! Çıkış için 'q'.")
 
 while True:
-    ret, frame = cap.read()
+    ret, ham_frame = cap.read()
     if not ret: break
 
-    # Güneş/Ters Işık Adaptasyonu Devrede (CLAHE)
-    frame = clahe_dinamik_filtre(frame, clip_limit=3.0)
+    # Ham (orijinal) frame'i yeniden boyutlandır
+    ham_frame = cv2.resize(ham_frame, (FRAME_W, FRAME_H))
+    
+    # 1. KULLANICIYA GÖSTERİLECEK TEMİZ KOPYA (Filtresiz)
+    gosterilecek_frame = ham_frame.copy()
 
-    frame = cv2.resize(frame, (FRAME_W, FRAME_H))
-    gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    # 2. SİSTEMİN İŞLEYECEĞİ FİLTRELİ KOPYA (CLAHE Arka planda çalışır)
+    islenen_frame = clahe_dinamik_filtre(ham_frame, clip_limit=3.0)
+    gray = cv2.cvtColor(islenen_frame, cv2.COLOR_BGR2GRAY)
 
-    basarili, yolo_yapildi = takipci.guncelle(frame, gray)
+    # Takip algoritmasını filtrelenmiş görüntü ile besliyoruz!
+    basarili, yolo_yapildi = takipci.guncelle(islenen_frame, gray)
 
     vurus_margin_x = int(FRAME_W * 0.25)
     vurus_margin_y = int(FRAME_H * 0.10)
@@ -267,24 +290,27 @@ while True:
     av_merkez_x = (av_x1 + av_x2) // 2
     av_merkez_y = (av_y1 + av_y2) // 2
 
-    cv2.rectangle(frame, (av_x1, av_y1), (av_x2, av_y2), (0, 255, 255), 2)
-    cv2.circle(frame, (av_merkez_x, av_merkez_y), 4, (0, 255, 255), -1)
+    # Çizimleri filtrelenmemiş, temiz kareye yapıyoruz
+    cv2.rectangle(gosterilecek_frame, (av_x1, av_y1), (av_x2, av_y2), (0, 255, 255), 2)
+    cv2.circle(gosterilecek_frame, (av_merkez_x, av_merkez_y), 4, (0, 255, 255), -1)
 
     zaman_ms = time.time()
     zaman_metni = time.strftime('%H:%M:%S', time.localtime(zaman_ms)) + f".{int((zaman_ms % 1) * 1000):03d}"
     
     text_size, _ = cv2.getTextSize(zaman_metni, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
-    cv2.putText(frame, zaman_metni, (FRAME_W - text_size[0] - 10, 25), 
+    cv2.putText(gosterilecek_frame, zaman_metni, (FRAME_W - text_size[0] - 10, 25), 
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
     if basarili and takipci.kalman_bbox is not None:
         x, y, w, h = takipci.kalman_bbox
         cx, cy = x + w // 2, y + h // 2
         
-        merkez_icerde_mi = (av_x1 <= cx <= av_x2) and (av_y1 <= cy <= av_y2)
+        # SIKI KURAL: Bütün kutu sarı alanın tam içinde olmak ZORUNDA!
+        # Kutunun en sol (x), en üst (y), en sağ (x+w) ve en alt (y+h) koordinatları sorgulanır.
+        tamamen_icerde_mi = (x >= av_x1) and (y >= av_y1) and (x + w <= av_x2) and (y + h <= av_y2)
         yuzde6_sart_saglandi = (w >= FRAME_W * HEDEF_MIN_YUZDE) or (h >= FRAME_H * HEDEF_MIN_YUZDE)
 
-        if merkez_icerde_mi and yuzde6_sart_saglandi:
+        if tamamen_icerde_mi and yuzde6_sart_saglandi:
             if kilit_baslangic_zamani is None:
                 kilit_baslangic_zamani = time.time()
             
@@ -302,30 +328,31 @@ while True:
             gorsel_renk = (255, 0, 0)  
             hedef_durumu = "TAKIP EDILIYOR"
 
-        cv2.line(frame, (av_merkez_x, av_merkez_y), (cx, cy), gorsel_renk, 1)
-        cv2.rectangle(frame, (x, y), (x + w, y + h), gorsel_renk, 2)
-        cv2.circle(frame, (cx, cy), 3, gorsel_renk, -1) 
+        cv2.line(gosterilecek_frame, (av_merkez_x, av_merkez_y), (cx, cy), gorsel_renk, 1)
+        cv2.rectangle(gosterilecek_frame, (x, y), (x + w, y + h), gorsel_renk, 2)
+        cv2.circle(gosterilecek_frame, (cx, cy), 3, gorsel_renk, -1) 
 
-        cv2.putText(frame, f"{hedef_durumu}", (x, max(y - 10, 12)),
+        cv2.putText(gosterilecek_frame, f"{hedef_durumu}", (x, max(y - 10, 12)),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, gorsel_renk, 2)
 
         conf_prefix = "~" if takipci.mod == takipci.MOD_LK else ""
         etiket = f"IHA ID:{takipci.hedef_id} {conf_prefix}%{takipci.son_conf * 100:.1f}"
         (_, th), _ = cv2.getTextSize(etiket, cv2.FONT_HERSHEY_SIMPLEX, 0.65, 2)
-        cv2.putText(frame, etiket, (x + 4, min(y + h + th + 6, FRAME_H - 4)),
+        cv2.putText(gosterilecek_frame, etiket, (x + 4, min(y + h + th + 6, FRAME_H - 4)),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.65, gorsel_renk, 2)
         
     else:
         kilit_baslangic_zamani = None
-        cv2.putText(frame, "HEDEF ARANIYOR...", (20, 60),
+        cv2.putText(gosterilecek_frame, "HEDEF ARANIYOR...", (20, 60),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
 
     mod_renk = (0, 255, 0) if takipci.mod == takipci.MOD_DEEP else (0, 165, 255)
     if takipci.mod != takipci.MOD_YOK:
-        cv2.putText(frame, f"MOD: {takipci.mod}", (FRAME_W - 160, 45),
+        cv2.putText(gosterilecek_frame, f"MOD: {takipci.mod}", (FRAME_W - 160, 45),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, mod_renk, 2)
 
-    cv2.imshow('Teknofest 2026 Hibrit Takip', frame)
+    # Ekrana her zaman temiz ve filtresiz kareyi yansıtıyoruz
+    cv2.imshow('Teknofest 2026 Hibrit Takip', gosterilecek_frame)
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
