@@ -1,34 +1,72 @@
-# ✈️ Teknofest 2026 - Savaşan İHA Görüntü İşleme & Hedef Takip Sistemi
+# ✈️ UAV_TRACKER — Savaşan İHA Hibrit Hedef Takip Sistemi
 
-Bu depo, **Teknofest 2026 Savaşan İHA** yarışması kapsamında geliştirilen gerçek zamanlı nesne tespiti, hibrit takip (Object Tracking), yörünge tahmini (Kalman) ve görsel tanıma (ReID) algoritmalarını barındırır.
+**HÜRTÜRK İHA Takımı** · TEKNOFEST Savaşan İHA
 
----
+Sabit kanatlı İHA'mızın kamerasından rakip İHA'yı gerçek zamanlı tespit edip kilitlenen görüntü işleme sistemi. YOLO tespitini klasik takip algoritmalarıyla birleştirerek, modelin hedefi kaçırdığı karelerde de takibin kopmamasını sağlar.
 
-## 📂 Kod Versiyonları ve Gelişim Evrimi
-
-| Dosya Adı                       | Kullanılan Teknolojiler                            | Öne Çıkan Özellik                                                     | 
-| :---                            | :---                                               | :---                                                                  |
-| **`ucak_base.py`**              | YOLOv8 + Lucas-Kanade + CSRT                       | Temel hibrit yapı ve "Hayalet Takip" koruması.                        | 
-| **`ucak_v1.py`**                | YOLOv8 + LK + Kalman Filtresi                      | 2D fizik tabanlı yörünge tahmini ve Teknofest kilitlenme timer'ı.     |
-| **`ucak_v2_clahe.py`**          | YOLOv8 + LK + Kalman + CLAHE                       | Ters ışık ve güneş patlamalarına karşı dinamik aydınlatma filtresi.   |
-| **`ucak_v3_bytetrack.py`**      | YOLOv8 (ByteTrack) + LK + Kalman                   | CSRT yerine modern ByteTrack entegrasyonu, mikro gürültü filtresi.    |
-| **`ucak_v5_ultimate.py`**       | YOLOv8 (DeepSORT/BoT-SORT) + ReID + Kalman + CLAHE | Görsel doku tanıma (ReID) ile ID koruması ve en kararlı hedef kilidi. |
+> **Aktif sürüm: [`UAV_V1`](UAV_V1/)** — YOLOv8 + Lucas-Kanade + CSRT + Kalman. Diğer sürümler karşılaştırma için denenen alternatif yaklaşımlardır.
 
 ---
 
-## ⚠️ Model ve Video Dosyaları Hakkında
+## 🧠 Nasıl Çalışır? (UAV_V1)
 
-Büyük boyutlu model ağırlıkları (`.pt`) ve test videoları (`.mp4`) GitHub depolama sınırları ve optimizasyon nedeniyle bu repoda **bulunmamaktadır**. 
+```mermaid
+flowchart LR
+    A[Kamera / Video] --> B{Her N karede<br/>YOLOv8 tespit}
+    B -->|Hedef bulundu| C[Lucas-Kanade<br/>optik akış]
+    C -->|Noktalar zayıfladı| D[CSRT yedek takipçi]
+    C --> E[Kalman filtresi]
+    D --> E
+    B -->|Doğrulama yok| F[Kayıp sayacı<br/>→ kilidi düşür]
+    E --> G[Vuruş alanı +<br/>4 sn kilitlenme sayacı]
+```
 
-### 📌 Dosya Konumlandırma ve İsimlendirme Kuralları
-Sistemi kendi bilgisayarınızda çalıştırmak için dosyaları dilediğiniz bir klasöre koyabilirsiniz, ancak kodların düzgün çalışabilmesi için şu kurallara dikkat etmeniz gerekir:
-
-1. **Video İsimlendirmesi:** Kodlar çalıştırıldığında sizden `1` ile `6` arasında bir kaynak seçimi isteyecektir. Bu yüzden test videolarınızın adı kesinlikle **`1.mp4`, `2.mp4`, `3.mp4`, `4.mp4`, `5.mp4` ve `6.mp4`** olmalıdır.
-2. **Yol (Path) Ayarı:** Kodu kendi bilgisayarınıza indikten sonra, scriptlerin en üst kısmındaki `MODEL_PATH` ve video dosya yollarını **kendi bilgisayarınızdaki klasör konumuna göre** güncellemeyi unutmayın.
+- **YOLOv8 tespit:** Her `RE_DETECT_INTERVAL` karede bir tam tarama yapar. Adaylar merkeze uzaklık, güven skoru ve alan büyüklüğüne göre puanlanır.
+- **Lucas-Kanade optik akış:** Tespit yapılmayan ara karelerde hedefin üzerindeki noktaları izler. İleri-geri doğrulama ile hatalı noktaları eler.
+- **CSRT yedek takipçi:** Optik akış noktaları azaldığında devreye girer.
+- **Kalman filtresi:** Hedefin hızını tahmin eder, kutuyu yumuşatır, kısa süreli kayıplarda konumu tahminle sürdürür.
+- **Hayalet takip koruması:** Hedef belirli sayıda kare boyunca YOLO ile doğrulanamazsa kilit düşürülür ve yeni hedef aranır.
+- **Yarışma kuralları:** Hedef vuruş alanında ve minimum boyut şartını sağlıyorsa 4 saniyelik kilitlenme sayacı başlar.
 
 ---
 
-## ⚙️ Gereksinimler
+## 📂 Sürümler
+
+Farklı takip yaklaşımlarını aynı test videoları üzerinde karşılaştırmak için 6 sürüm geliştirildi:
+
+| Klasör | Yaklaşım | Not |
+| :--- | :--- | :--- |
+| [`UAV_BASE`](UAV_BASE/) | YOLOv8 + LK + CSRT | İlk hibrit yapı |
+| [`UAV_V1`](UAV_V1/) ⭐ | YOLOv8 + LK + CSRT + Kalman | **Kullanılan sürüm** — yörünge tahmini ve kilitlenme sayacı |
+| [`UAV_V2`](UAV_V2/) | V1 + CLAHE | Ters ışık / güneş patlamasına karşı kontrast iyileştirme |
+| [`UAV_V3`](UAV_V3/) | YOLOv8 + ByteTrack + LK + Kalman | CSRT yerine ByteTrack denemesi |
+| [`UAV_V4`](UAV_V4/) | V3 + mikro gürültü filtresi | ByteTrack iyileştirmeleri |
+| [`UAV_V5`](UAV_V5/) | BoT-SORT + ReID + CLAHE + Kalman | Görsel yeniden tanıma denemesi |
+
+Karşılaştırmaların sonucunda yarışma çalışmalarına V1 ile devam ediliyor.
+
+---
+
+## 🚀 Kurulum ve Çalıştırma
 
 ```bash
 pip install ultralytics opencv-contrib-python torch numpy
+python3 UAV_V1/UAV_TRACKER_V1.py
+```
+
+Çalıştırınca kaynak seçimi istenir: `0` canlı kamera, `1`–`6` test videoları.
+
+> ⚠️ Model ağırlıkları (`.pt`) ve test videoları boyut nedeniyle repoda yok. Bunları [`MODELS_and_VİDEO`](MODELS_and_VİDEO/) klasörüne koyup (videolar `1.mp4` … `6.mp4`) script'in başındaki `MODEL_PATH` ve video yollarını kendi bilgisayarına göre güncelle.
+
+---
+
+## 🛠️ Yol Haritası
+
+- [ ] Raspberry Pi 5 + Hailo-8 üzerinde HEF modelle çalışan sürümün repoya eklenmesi
+- [ ] GPS'ten görüntüye geçiş (hedefe GPS ile yaklaşıp görüntüyle kilitlenme)
+- [ ] MAVLink ile gimbal / yön kontrolü entegrasyonu
+- [ ] Sabit dosya yollarının komut satırı argümanlarına taşınması
+
+---
+
+**Geliştiren:** [Can Ahmet Atik](https://github.com/canahmet1407) — HÜRTÜRK İHA Takımı Kaptanı & Görüntü İşleme Lideri
